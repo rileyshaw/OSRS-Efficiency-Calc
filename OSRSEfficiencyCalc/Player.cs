@@ -49,6 +49,19 @@ namespace OSRSEfficiencyCalc
             }
             return Definitions.xpreqs[lvl] - curXp;
         }
+        public static int convertXpToLevel(int curXp)
+        {
+            int lvl = 1;
+            while (Definitions.xpreqs[lvl] <= curXp)
+            {
+                lvl++;
+                if (lvl == 99)
+                {
+                    return 99;
+                }
+            }
+            return lvl;
+        }
 
     }
 

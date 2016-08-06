@@ -51,41 +51,25 @@ namespace OSRSEfficiencyCalc
             curPlayer = new Player();
             updatePricing();
             updateSkills();
-            updateCrafting();
+            initCrafting();
+
         }
         private void itemView_ColumnClick(object sender, System.Windows.Forms.ColumnClickEventArgs e)
         {
             this.itemView.ListViewItemSorter = new ItemViewItemComparer(e.Column);
             // Call the sort method to manually sort.
-            listView1.Sort();
+            itemView.Sort();
+        }
+        private void craftingView_ColumnClick(object sender, System.Windows.Forms.ColumnClickEventArgs e)
+        {
+            this.craftingList.ListViewItemSorter = new CraftingViewItemComparer(e.Column);
+            // Call the sort method to manually sort.
+            craftingList.Sort();
         }
         private void button1_Click(object sender, EventArgs e)
         {
             userName = this.playerText.Text;
-            userName = userName.Replace(' ', '_');
-            WebRequest request = WebRequest.Create("http://services.runescape.com/m=hiscore_oldschool/index_lite.ws?player=" + userName);
-            request.Credentials = CredentialCache.DefaultCredentials;
-            // Get the response.
-            try {
-                WebResponse response = request.GetResponse();
-                // Display the status.
-                Console.WriteLine(((HttpWebResponse)response).StatusDescription);
-                // Get the stream containing content returned by the server.
-                Stream dataStream = response.GetResponseStream();
-                // Open the stream using a StreamReader for easy access.
-                StreamReader reader = new StreamReader(dataStream);
-                // Read the content.
-                string responseFromServer = reader.ReadToEnd();
-                curPlayer = new Player(userName, responseFromServer);
-                updateSkills();
-                // Clean up the streams and the response.
-                reader.Close();
-                response.Close();
-            }
-            catch (Exception exc)
-            {
-                MessageBox.Show("Player lookup failed.");
-            }
+            loadPlayer(userName);
         }
         private void buttonRefresh_Click(object sender, EventArgs e)
         {
@@ -119,8 +103,61 @@ namespace OSRSEfficiencyCalc
                 }
             }
         }
+        public void initCrafting() {
+            craftingLoadPlayer.Text = userName;
+            if(Crafting.displayLevel) {
+                craftingCurLevel.Text = curPlayer.levels[12].ToString();
+                if(curPlayer.levels[12] >= 99) {
+                    craftingTargetLevel.Text = "99";
+                }else {
+                    craftingTargetLevel.Text = (curPlayer.levels[12] +1).ToString();
+                }
+            }else {
+                 craftingCurLevel.Text = curPlayer.curxp[12].ToString();
+                if(curPlayer.curxp[12] >= Definitions.xpreqs[98]) {
+                    craftingTargetLevel.Text = Definitions.xpreqs[98].ToString();
+                }else {
+                    craftingTargetLevel.Text = (Definitions.xpreqs[curPlayer.levels[12]]).ToString();
+                }
+            }
+            new Crafting();
+            craftingList.Items.Clear();
+            for (int i = 0; i < Crafting.listOfMethods.Count; i++)
+            {
+                craftingList.Items.Add(new ListViewItem(new string[] { ((SkillMethod)(Crafting.listOfMethods[i])).description, ((SkillMethod)(Crafting.listOfMethods[i])).totalbuyperaction.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).totalsellperaction.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).avgxperHour.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).gpperxpString }));
+            }
+            updateCrafting();
+        }
+        public void loadPlayer(String name) {
+            userName = name;
+            userName = userName.Replace(' ', '_');
+            WebRequest request = WebRequest.Create("http://services.runescape.com/m=hiscore_oldschool/index_lite.ws?player=" + userName);
+            request.Credentials = CredentialCache.DefaultCredentials;
+            // Get the response.
+            try {
+                WebResponse response = request.GetResponse();
+                // Display the status.
+                Console.WriteLine(((HttpWebResponse)response).StatusDescription);
+                // Get the stream containing content returned by the server.
+                Stream dataStream = response.GetResponseStream();
+                // Open the stream using a StreamReader for easy access.
+                StreamReader reader = new StreamReader(dataStream);
+                // Read the content.
+                string responseFromServer = reader.ReadToEnd();
+                curPlayer = new Player(userName, responseFromServer);
+                updateSkills();
+                updateCrafting();
+                reader.Close();
+                response.Close();
+            }
+            catch (Exception exc)
+            {
+                MessageBox.Show("Player lookup failed.");
+            }
+        }
         public void updateSkills()
         {
+            playerText.Text = userName;
             listView1.Items.Clear();
             for (int i = 0; i < 23; i++)
             {
@@ -128,11 +165,70 @@ namespace OSRSEfficiencyCalc
             }
         }
         public void updateCrafting() {
-            new Crafting();
+            craftingLoadPlayer.Text = userName;
+            double bestGPHour = double.Parse(bestgpText.Text);
+            if(bestGPHour <= 0.0) {
+                bestGPHour = 0.1;
+                bestgpText.Text = bestGPHour.ToString();
+            }
+            int totalcost;
+            int goalxp, curxp;
+            int current = int.Parse(craftingCurLevel.Text);
+            int target = int.Parse(craftingTargetLevel.Text);
+            if(Crafting.displayLevel) {
+                if(curPlayer.levels[12] == current) {
+                    curxp = curPlayer.curxp[12];
+                    if(target > 0 && target <= 99) {
+                        goalxp = Definitions.xpreqs[target - 1];
+                    }else {
+                        goalxp = curxp;
+                    }
+                }else {
+                    if(current > 0 && current <= 99) {
+                        curxp = Definitions.xpreqs[current - 1];
+                    }else {
+                        if(curPlayer != null) {
+                            curxp = curPlayer.curxp[12];
+                        }else {
+                            curxp = 0;
+                        }
+                    }
+                    if(target > 0 && target <= 99) {
+                        goalxp = Definitions.xpreqs[target - 1];
+                    }else {
+                        goalxp = curxp;
+                    }
+                }
+            }else {
+                if(current > 0) {
+                    curxp = current;
+                }else {
+                    curxp = 0;
+                }
+                if(target > current) {
+                    goalxp = target;
+                }else {
+                    goalxp = current;
+                }
+            }
+            int xptogain = goalxp - curxp;
+            double timemoneymaking;
+            double totaltimespent;
+            String totalcostString;
+            String timemoneymakingString;
+            String totaltimespentString;
             craftingList.Items.Clear();
-            for (int i = 0; i < Crafting.listOfMethods.Count; i++)
-            {
-                craftingList.Items.Add(new ListViewItem(new string[] { ((SkillMethod)(Crafting.listOfMethods[i])).description, ((SkillMethod)(Crafting.listOfMethods[i])).totalbuyperaction.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).totalsellperaction.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).avgxperHour.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).gpperxp.ToString() }));
+            for (int i = 0; i < Crafting.listOfMethods.Count;i++) {
+                totalcost = (int)(xptogain * ((SkillMethod)Crafting.listOfMethods[i]).gpperxp);
+                totalcostString = totalcost.ToString("N0") + " gp";
+                timemoneymaking = (double)totalcost / (bestGPHour * 1000000);
+                if(timemoneymaking < 0) {
+                    timemoneymaking = 0;
+                }
+                timemoneymakingString = String.Format("{0:0.00}", timemoneymaking) + " Hours";
+                totaltimespent = (xptogain / ((SkillMethod)Crafting.listOfMethods[i]).avgxperHour) + timemoneymaking;
+                totaltimespentString = String.Format("{0:0.00}", totaltimespent) + " Hours";
+                craftingList.Items.Add(new ListViewItem(new string[] { ((SkillMethod)(Crafting.listOfMethods[i])).description, ((SkillMethod)(Crafting.listOfMethods[i])).totalbuyperaction.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).totalsellperaction.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).avgxperHour.ToString("N0"), ((SkillMethod)(Crafting.listOfMethods[i])).gpperxpString, totalcostString, timemoneymakingString,totaltimespentString}));
             }
         }
         public void updatePricing()
@@ -150,47 +246,57 @@ namespace OSRSEfficiencyCalc
             searchPricingFilter(textBoxSearch.Text);
         }
 
-      
+        private void craftingCalculate_Click(object sender, EventArgs e)
+        {
+
+            updateCrafting();
+        }
+
+        private void craftingLoad_Click(object sender, EventArgs e)
+        {
+            userName = craftingLoadPlayer.Text;
+            loadPlayer(userName);
+            initCrafting();
+        }
+
+        private void craftingRadioLevel_CheckedChanged(object sender, EventArgs e)
+        {
+            RadioButton temp = (RadioButton)sender;
+            if(temp.Checked) {
+                Crafting.displayLevel = true;
+                int temps = int.Parse(craftingCurLevel.Text);
+                 if(temps < 0 || temps > Definitions.xpreqs[98]) {
+                    craftingCurLevel.Text = "0";
+                }else {
+                    temps = Player.convertXpToLevel(temps);
+                    craftingCurLevel.Text = temps.ToString();
+                }
+                temps = int.Parse(craftingTargetLevel.Text);
+                if(temps < 0 || temps > Definitions.xpreqs[98]) {
+                    craftingTargetLevel.Text = "0";
+                }else {
+                    temps = Player.convertXpToLevel(temps);
+                    craftingTargetLevel.Text = temps.ToString();
+                }
+            }else {
+                Crafting.displayLevel = false;
+                int temps = int.Parse(craftingCurLevel.Text);
+                if(temps < 1 || temps > 99) {
+                    craftingCurLevel.Text = "0";
+                }else {
+                    craftingCurLevel.Text = Definitions.xpreqs[temps-1].ToString();
+                }
+                temps = int.Parse(craftingTargetLevel.Text);
+                if(temps < 1 || temps > 99) {
+                    craftingTargetLevel.Text = "0";
+                }else {
+                    craftingTargetLevel.Text = Definitions.xpreqs[temps-1].ToString();
+                }
+            }
+        }
     }
 }
-public class Crafting {
-    public static ArrayList listOfMethods;
-    public Crafting() {
-        listOfMethods = new ArrayList();
-        SkillMethod temp = new SkillMethod("Gold amulet (unstrung)", new string[] { "Gold bar" }, new string[] { "Gold amulet (u)" },30,1500);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Sapphire", new string[] { "Uncut sapphire" }, new string[] { "Sapphire" }, 50, 2700);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Emerald", new string[] { "Uncut emerald" }, new string[] { "Emerald" }, 67.5, 2700);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Ruby", new string[] { "Uncut ruby" }, new string[] { "Ruby" }, 85, 2700);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Diamond", new string[] { "Uncut diamond" }, new string[] { "Diamond" }, 107.5, 2700);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Dragonstone", new string[] { "Uncut dragonstone" }, new string[] { "Dragonstone" }, 137.5, 2700);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Onyx", new string[] { "Uncut onyx" }, new string[] { "Onyx" }, 167.5, 2700);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Green D'hide", new string[] { "Green dragon leather","Green dragon leather","Green dragon leather","Thread" }, new string[] { "Green d'hide body" }, 186, 1650);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Blue D'hide", new string[] { "Blue dragon leather", "Blue dragon leather", "Blue dragon leather", "Thread" }, new string[] { "Blue d'hide body" }, 210, 1650);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Red D'hide", new string[] { "Red dragon leather", "Red dragon leather", "Red dragon leather", "Thread" }, new string[] { "Red d'hide body" }, 234, 1650);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Black D'hide", new string[] { "Black dragon leather", "Black dragon leather", "Black dragon leather", "Thread" }, new string[] { "Black d'hide body" }, 258, 1650);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Water Battlestaff", new string[] { "Battlestaff", "Water orb"}, new string[] { "Water battlestaff" }, 100, 2450);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Earth Battlestaff", new string[] { "Battlestaff", "Earth orb" }, new string[] { "Earth battlestaff" }, 112.5, 2450);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Fire Battlestaff", new string[] { "Battlestaff", "Fire orb" }, new string[] { "Fire battlestaff" }, 125, 2450);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Air Battlestaff", new string[] { "Battlestaff", "Air orb" }, new string[] { "Air battlestaff" }, 137.5, 2450);
-        listOfMethods.Add(temp);
-        temp = new SkillMethod("Unpowered Orbs", new string[] { "Molten glass" }, new string[] { "Unpowered orb" }, 52.5, 1523);
-        listOfMethods.Add(temp);
-    }
-}
+
 public class SkillMethod {
     public String description;
     public ArrayList itemsToBuy;
@@ -202,6 +308,7 @@ public class SkillMethod {
     public double xpPerAction = 0;
     public int actionsPerHour = 0;
     public double gpperxp = 0;
+    public String gpperxpString;
     public int gpperAction = 0;
 
     public SkillMethod(String desc, String[] iToBuy, String[] iToSell, double xpaction, int actionhour) {
@@ -228,6 +335,7 @@ public class SkillMethod {
         }
         gpperAction = totalbuyperaction - totalsellperaction;
         gpperxp = (double)gpperAction / (double)xpPerAction;
+        gpperxpString = String.Format("{0:0.00}", gpperxp);
 
     }
 
